@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>C++ 内存模型动画演示</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            color: #e0e0e0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            font-size: 2.2em;
+            margin: 30px 0;
+            background: linear-gradient(90deg, #00d9ff, #00ff88);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 40px;
+        }
+        .demo-section {
+            background: rgba(255,255,255,0.05);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .demo-title {
+            font-size: 1.4em;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+        .badge-seq_cst { background: #ff6b6b; }
+        .badge-acq_rel { background: #ffd93d; color: #000; }
+        .badge-release { background: #6bcb77; }
+        .badge-acquire { background: #4d96ff; }
+        .badge-relaxed { background: #9b59b6; }
+        .badge-consume { background: #e67e22; }
+        .description {
+            color: #aaa;
+            margin-bottom: 25px;
+            line-height: 1.6;
+        }
+        .code-block {
+            background: #0d1117;
+            border-radius: 8px;
+            padding: 20px;
+            font-family: 'Consolas', monospace;
+            font-size: 0.9em;
+            overflow-x: auto;
+            margin-bottom: 25px;
+            border: 1px solid #30363d;
+        }
+        .code-comment { color: #6a737d; }
+        .code-keyword { color: #ff7b72; }
+        .code-type { color: #79c0ff; }
+        .code-function { color: #d2a8ff; }
+        .code-variable { color: #ffa657; }
+        .code-thread { color: #7ee787; }
+        .visual-area {
+            position: relative;
+            height: 280px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .thread-line {
+            position: absolute;
+            left: 50px;
+            width: 4px;
+            height: calc(100% - 40px);
+            top: 20px;
+        }
+        .thread-line-t1 { background: linear-gradient(180deg, #ff6b6b, #ff8787); }
+        .thread-line-t2 { background: linear-gradient(180deg, #4d96ff, #74b9ff); }
+        .thread-label {
+            position: absolute;
+            left: 10px;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+        .thread-label-t1 { color: #ff6b6b; top: 20px; }
+        .thread-label-t2 { color: #4d96ff; top: 70px; }
+        .memory-label {
+            position: absolute;
+            right: 20px;
+            font-weight: bold;
+            color: #ffd93d;
+            font-size: 0.9em;
+        }
+        .memory-box {
+            position: absolute;
+            right: 20px;
+            width: 120px;
+            height: 50px;
+            background: rgba(255,217,61,0.2);
+            border: 2px solid #ffd93d;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: monospace;
+            font-size: 1.1em;
+            font-weight: bold;
+        }
+        .memory-x { top: 20px; }
+        .memory-y { top: 80px; }
+        .memory-r { top: 140px; }
+        .operation {
+            position: absolute;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            white-space: nowrap;
+        }
+        .operation:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 20px currentColor;
+        }
+        .op-write { background: #6bcb77; color: #000; }
+        .op-read { background: #4d96ff; color: #fff; }
+        .op-store { background: #6bcb77; color: #000; }
+        .op-load { background: #ff6b6b; color: #fff; }
+        .op-cas { background: #e67e22; color: #fff; }
+        .arrow {
+            position: absolute;
+            width: 60px;
+            height: 3px;
+            background: #888;
+        }
+        .arrow::after {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: -4px;
+            border: 5px solid transparent;
+            border-left-color: #888;
+        }
+        .fence {
+            position: absolute;
+            width: 4px;
+            height: 80px;
+            background: repeating-linear-gradient(0deg, #fff 0px, #fff 3px, transparent 3px, transparent 6px);
+            top: -10px;
+        }
+        .fence-label {
+            position: absolute;
+            top: 85px;
+            font-size: 0.7em;
+            color: #fff;
+            left: -10px;
+            width: 30px;
+            text-align: center;
+        }
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn-run {
+            background: linear-gradient(135deg, #00d9ff, #00ff88);
+            color: #000;
+        }
+        .btn-reset {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0,217,255,0.3);
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-left: auto;
+        }
+        .speed-control input {
+            width: 150px;
+        }
+        .result-box {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(0,0,0,0.4);
+            border-radius: 8px;
+            font-family: monospace;
+            min-height: 60px;
+        }
+        .result-item {
+            padding: 5px 0;
+            display: flex;
+            gap: 10px;
+        }
+        .result-true { color: #6bcb77; }
+        .result-false { color: #ff6b6b; }
+        .result-neutral { color: #ffd93d; }
+        .timeline {
+            position: absolute;
+            bottom: 10px;
+            left: 60px;
+            right: 20px;
+            height: 20px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+        }
+        .timeline-tick {
+            position: absolute;
+            top: 0;
+            width: 2px;
+            height: 100%;
+            background: rgba(255,255,255,0.3);
+        }
+        .timeline-label {
+            position: absolute;
+            top: 22px;
+            font-size: 0.7em;
+            color: #666;
+            transform: translateX(-50%);
+        }
+        .legend {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+            font-size: 0.85em;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        .legend-dot-write { background: #6bcb77; }
+        .legend-dot-read { background: #4d96ff; }
+        .legend-dot-fence { background: linear-gradient(0deg, #fff, #fff); }
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .comparison-table th, .comparison-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .comparison-table th {
+            background: rgba(255,255,255,0.05);
+            color: #00d9ff;
+        }
+        .comparison-table tr:hover {
+            background: rgba(255,255,255,0.03);
+        }
+        .nav-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        .nav-tab {
+            padding: 10px 20px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .nav-tab:hover, .nav-tab.active {
+            background: rgba(0,217,255,0.2);
+            border-color: #00d9ff;
+        }
+        .hidden { display: none; }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.8; }
+        }
+        .animating {
+            animation: pulse 0.5s ease-in-out;
+        }
+        @keyframes moveRight {
+            from { left: 50px; }
+            to { right: 160px; }
+        }
+        @keyframes moveDown {
+            from { top: 30px; }
+            to { top: 80px; }
+        }
+        .flow-arrow {
+            position: absolute;
+            width: 0;
+            height: 0;
+            border-left: 10px solid transparent;
+            border-right: 10px solid transparent;
+            border-top: 10px solid #6bcb77;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 C++ 内存模型动画演示</h1>
+        <p class="subtitle">六种内存顺序的可视化对比</p>
+
+        <div class="nav-tabs">
+            <div class="nav-tab active" onclick="showDemo('seq_cst')">🔴 seq_cst</div>
+            <div class="nav-tab" onclick="showDemo('acq_rel')">🟡 acq_rel</div>
+            <div class="nav-tab" onclick="showDemo('release_acquire')">🟢 release/acquire</div>
+            <div class="nav-tab" onclick="showDemo('relaxed')">🟣 relaxed</div>
+            <div class="nav-tab" onclick="showDemo('comparison')">📊 对比表</div>
+        </div>
+
+        <!-- seq_cst -->
+        <div id="demo-seq_cst" class="demo-section">
+            <div class="demo-title">
+                <span class="badge badge-seq_cst">seq_cst</span>
+                顺序一致性
+            </div>
+            <div class="description">
+                最严格的内存顺序。所有线程看到相同的操作顺序，所有原子操作全局有序。
+                保证 "既然看到了 A，就一定能看到 A 之前的所有操作"。
+            </div>
+            <div class="code-block">
+<span class="code-comment">// Thread 1</span>
+<span class="code-variable">x</span>.<span class="code-function">store</span>(1, <span class="code-type">seq_cst</span>);
+<span class="code-variable">y</span>.<span class="code-function">store</span>(1, <span class="code-type">seq_cst</span>);
+
+<span class="code-comment">// Thread 2</span>
+<span class="code-keyword">while</span> (<span class="code-variable">y</span>.<span class="code-function">load</span>(<span class="code-type">seq_cst</span>) == 0);
+<span class="code-keyword">assert</span>(<span class="code-variable">x</span>.<span class="code-function">load</span>(<span class="code-type">seq_cst</span>) == 1);  <span class="code-comment">// 永远成立</span>
+            </div>
+            <div class="visual-area" id="vis-seq_cst">
+                <div class="thread-label thread-label-t1">Thread 1</div>
+                <div class="thread-label thread-label-t2">Thread 2</div>
+                <div class="thread-line thread-line-t1"></div>
+                <div class="thread-line thread-line-t2"></div>
+                <div class="memory-box memory-x">x=0</div>
+                <div class="memory-box memory-y">y=0</div>
+                <div class="memory-box memory-r">r=?</div>
+                <div class="timeline">
+                    <span class="timeline-label" style="left:0%">0</span>
+                    <span class="timeline-label" style="left:33%">T1</span>
+                    <span class="timeline-label" style="left:66%">T2</span>
+                    <span class="timeline-label" style="left:100%">end</span>
+                </div>
+                <!-- Operations will be added by JS -->
+            </div>
+            <div class="legend">
+                <div class="legend-item"><div class="legend-dot legend-dot-write"></div> 写入 (store)</div>
+                <div class="legend-item"><div class="legend-dot legend-dot-read"></div> 读取 (load)</div>
+                <div class="legend-item">🔄 全局有序</div>
+            </div>
+            <div class="controls">
+                <button class="btn-run" onclick="runDemo('seq_cst')">▶ 运行</button>
+                <button class="btn-reset" onclick="resetDemo('seq_cst')">↺ 重置</button>
+                <div class="speed-control">
+                    <label>速度:</label>
+                    <input type="range" min="200" max="2000" value="1000" onchange="setSpeed(this.value)">
+                </div>
+            </div>
+            <div class="result-box" id="result-seq_cst">
+                <div style="color:#888">点击"运行"开始动画...</div>
+            </div>
+        </div>
+
+        <!-- acq_rel -->
+        <div id="demo-acq_rel" class="demo-section hidden">
+            <div class="demo-title">
+                <span class="badge badge-acq_rel">acq_rel</span>
+                获取-释放
+            </div>
+            <div class="description">
+                用于 read-modify-write 操作（如 exchange）。同时具有 acquire 和 release 的效果：
+                获取旧值的同时写入新值，并保证同步。
+            </div>
+            <div class="code-block">
+<span class="code-variable">std::atomic</span>&lt;<span class="code-type">int</span>&gt; <span class="code-variable">turn</span>{0};
+
+<span class="code-comment">// Thread 1: 想获取 turn</span>
+<span class="code-type">int</span> old = <span class="code-variable">turn</span>.<span class="code-function">exchange</span>(1, <span class="code-type">acq_rel</span>);
+<span class="code-comment">// old=0 表示获得锁，现在可以安全操作</span>
+
+<span class="code-comment">// Thread 2: 想释放 turn</span>
+<span class="code-variable">turn</span>.<span class="code-function">store</span>(0, <span class="code-type">release</span>);
+            </div>
+            <div class="visual-area" id="vis-acq_rel">
+                <div class="thread-label thread-label-t1">Thread 1</div>
+                <div class="thread-label thread-label-t2">Thread 2</div>
+                <div class="thread-line thread-line-t1"></div>
+                <div class="thread-line thread-line-t2"></div>
+                <div class="memory-box memory-x">turn=0</div>
+                <div class="memory-box memory-y">old=?</div>
+            </div>
+            <div class="controls">
+                <button class="btn-run" onclick="runDemo('acq_rel')">▶ 运行</button>
+                <button class="btn-reset" onclick="resetDemo('acq_rel')">↺ 重置</button>
+            </div>
+            <div class="result-box" id="result-acq_rel">
+                <div style="color:#888">点击"运行"开始动画...</div>
+            </div>
+        </div>
+
+        <!-- release/acquire -->
+        <div id="demo-release_acquire" class="demo-section hidden">
+            <div class="demo-title">
+                <span class="badge badge-release">release</span> /
+                <span class="badge badge-acquire">acquire</span>
+                释放-获取同步
+            </div>
+            <div class="description">
+                release 写操作与 acquire 读操作形成同步点。release 之后的操作不会被重排到 release 之前；
+                acquire 之前的操作不会被重排到 acquire 之后。这是实现生产者-消费者模式的基础。
+            </div>
+            <div class="code-block">
+<span class="code-variable">std::atomic</span>&lt;<span class="code-type">bool</span>&gt; <span class="code-variable">ready</span>{<span class="code-keyword">false</span>};
+<span class="code-type">int</span> <span class="code-variable">data</span> = 0;
+
+<span class="code-comment">// 生产者 (release)</span>
+<span class="code-variable">data</span> = <span class="code-variable">42</span>;                    <span class="code-comment">// 写入数据</span>
+<span class="code-variable">ready</span>.<span class="code-function">store</span>(<span class="code-keyword">true</span>, <span class="code-type">release</span>);  <span class="code-comment">// 释放同步</span>
+
+<span class="code-comment">// 消费者 (acquire)</span>
+<span class="code-keyword">while</span> (!<span class="code-variable">ready</span>.<span class="code-function">load</span>(<span class="code-type">acquire</span>));   <span class="code-comment">// 获取同步</span>
+<span class="code-keyword">assert</span>(<span class="code-variable">data</span> == <span class="code-variable">42</span>);              <span class="code-comment">// 一定能看到 data=42</span>
+            </div>
+            <div class="visual-area" id="vis-release_acquire">
+                <div class="thread-label thread-label-t1">Producer</div>
+                <div class="thread-label thread-label-t2">Consumer</div>
+                <div class="thread-line thread-line-t1"></div>
+                <div class="thread-line thread-line-t2"></div>
+                <div class="memory-box memory-x">data=0</div>
+                <div class="memory-box memory-y">ready=F</div>
+            </div>
+            <div class="legend">
+                <div class="legend-item">🔗 同步点: release → acquire</div>
+            </div>
+            <div class="controls">
+                <button class="btn-run" onclick="runDemo('release_acquire')">▶ 运行</button>
+                <button class="btn-reset" onclick="resetDemo('release_acquire')">↺ 重置</button>
+            </div>
+            <div class="result-box" id="result-release_acquire">
+                <div style="color:#888">点击"运行"开始动画...</div>
+            </div>
+        </div>
+
+        <!-- relaxed -->
+        <div id="demo-relaxed" class="demo-section hidden">
+            <div class="demo-title">
+                <span class="badge badge-relaxed">relaxed</span>
+                松弛顺序
+            </div>
+            <div class="description">
+                只保证原子性，不保证顺序。编译器/CPU 可以自由重排操作。
+                适合计数器等不需要同步的场景。
+            </div>
+            <div class="code-block">
+<span class="code-variable">std::atomic</span>&lt;<span class="code-type">int</span>&gt; <span class="code-variable">x</span>{0}, <span class="code-variable">y</span>{0};
+
+<span class="code-comment">// Thread 1</span>
+<span class="code-variable">x</span>.<span class="code-function">store</span>(1, <span class="code-type">relaxed</span>);
+<span class="code-variable">y</span>.<span class="code-function">store</span>(1, <span class="code-type">relaxed</span>);
+
+<span class="code-comment">// Thread 2</span>
+<span class="code-type">int</span> r1 = <span class="code-variable">y</span>.<span class="code-function">load</span>(<span class="code-type">relaxed</span>);
+<span class="code-type">int</span> r2 = <span class="code-variable">x</span>.<span class="code-function">load</span>(<span class="code-type">relaxed</span>);
+
+<span class="code-comment">// r1=0 && r2=0 是可能的！操作被重排了</span>
+            </div>
+            <div class="visual-area" id="vis-relaxed">
+                <div class="thread-label thread-label-t1">Thread 1</div>
+                <div class="thread-label thread-label-t2">Thread 2</div>
+                <div class="thread-line thread-line-t1"></div>
+                <div class="thread-line thread-line-t2"></div>
+                <div class="memory-box memory-x">x=0</div>
+                <div class="memory-box memory-y">y=0</div>
+            </div>
+            <div class="controls">
+                <button class="btn-run" onclick="runDemo('relaxed')">▶ 运行</button>
+                <button class="btn-reset" onclick="resetDemo('relaxed')">↺ 重置</button>
+            </div>
+            <div class="result-box" id="result-relaxed">
+                <div style="color:#888">点击"运行"开始动画...</div>
+            </div>
+        </div>
+
+        <!-- Comparison Table -->
+        <div id="demo-comparison" class="demo-section hidden">
+            <div class="demo-title">📊 六种内存顺序对比</div>
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>内存顺序</th>
+                        <th>用途</th>
+                        <th>可见性</th>
+                        <th>顺序保证</th>
+                        <th>性能</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="badge badge-seq_cst">seq_cst</span></td>
+                        <td>全局同步</td>
+                        <td>全局</td>
+                        <td>强顺序</td>
+                        <td>最慢</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-acq_rel">acq_rel</span></td>
+                        <td>RMW 操作</td>
+                        <td>配对同步</td>
+                        <td>中顺序</td>
+                        <td>中</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-release">release</span></td>
+                        <td>写操作</td>
+                        <td>配对可见</td>
+                        <td>前序不重排</td>
+                        <td>中</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-acquire">acquire</span></td>
+                        <td>读操作</td>
+                        <td>配对可见</td>
+                        <td>后续不重排</td>
+                        <td>中</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-relaxed">relaxed</span></td>
+                        <td>计数器</td>
+                        <td>无</td>
+                        <td>无</td>
+                        <td>最快</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-consume">consume</span></td>
+                        <td>依赖链</td>
+                        <td>依赖可见</td>
+                        <td>依赖不重排</td>
+                        <td>快</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3 style="margin-top:30px; color:#00d9ff;">💡 同步模式速查</h3>
+            <div class="code-block" style="margin-top:15px;">
+<span class="code-comment">// 单向同步 (producer → consumer)</span>
+<span class="code-variable">writer</span>: <span class="code-variable">store</span>(x, <span class="code-type">release</span>)
+<span class="code-variable">reader</span>: <span class="code-variable">load</span>(x, <span class="code-type">acquire</span>)
+
+<span class="code-comment">// 双向同步 (互斥)</span>
+<span class="code-variable">lock</span>:   <span class="code-variable">exchange</span>(_, <span class="code-type">acq_rel</span>)
+<span class="code-variable">unlock</span>: <span class="code-variable">store</span>(_, <span class="code-type">release</span>)
+
+<span class="code-comment">// 顺序一致性</span>
+<span class="code-variable">x</span>.<span class="code-function">store</span>(1, <span class="code-type">seq_cst</span>)
+<span class="code-variable">y</span>.<span class="code-function">store</span>(1, <span class="code-type">seq_cst</span>)
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let speed = 1000;
+        let animationTimeouts = [];
+        let isRunning = false;
+
+        function setSpeed(val) {
+            speed = parseInt(val);
+        }
+
+        function showDemo(id) {
+            document.querySelectorAll('.demo-section').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.nav-tab').forEach(el => el.classList.remove('active'));
+            document.getElementById('demo-' + id).classList.remove('hidden');
+            document.querySelector(`.nav-tab[onclick="showDemo('${id}')"]`).classList.add('active');
+        }
+
+        function clearAnimations() {
+            animationTimeouts.forEach(t => clearTimeout(t));
+            animationTimeouts = [];
+            isRunning = false;
+        }
+
+        function delay(ms) {
+            return new Promise(resolve => {
+                const t = setTimeout(resolve, ms);
+                animationTimeouts.push(t);
+            });
+        }
+
+        function updateResult(id, html) {
+            document.getElementById('result-' + id).innerHTML = html;
+        }
+
+        function resetDemo(id) {
+            clearAnimations();
+            const vis = document.getElementById('vis-' + id);
+            // Remove all operations
+            vis.querySelectorAll('.operation, .sync-indicator, .arrow-line').forEach(el => el.remove());
+            updateResult(id, '<div style="color:#888">点击"运行"开始动画...</div>');
+        }
+
+        async function runDemo(id) {
+            if (isRunning) return;
+            clearAnimations();
+            isRunning = true;
+            resetDemo(id);
+
+            switch(id) {
+                case 'seq_cst': await demoSeqCst(); break;
+                case 'acq_rel': await demoAcqRel(); break;
+                case 'release_acquire': await demoReleaseAcquire(); break;
+                case 'relaxed': await demoRelaxed(); break;
+            }
+
+            isRunning = false;
+        }
+
+        function createOp(vis, className, text, top, left, color) {
+            const op = document.createElement('div');
+            op.className = 'operation ' + className;
+            op.textContent = text;
+            op.style.top = top + 'px';
+            op.style.left = left + 'px';
+            op.style.backgroundColor = color;
+            vis.appendChild(op);
+            return op;
+        }
+
+        function createSyncLine(vis, y1, y2, x, label) {
+            const line = document.createElement('div');
+            line.className = 'sync-indicator';
+            line.innerHTML = `
+                <div style="position:absolute; left:${x}px; top:${y1}px; width:2px; height:${y2-y1}px; background:#ffd93d;"></div>
+                <div style="position:absolute; left:${x-8}px; top:${(y1+y2)/2}px; font-size:12px; color:#ffd93d;">${label}</div>
+            `;
+            vis.appendChild(line);
+            return line;
+        }
+
+        async function demoSeqCst() {
+            const vis = document.getElementById('vis-seq_cst');
+            updateResult('seq_cst', '<div style="color:#888">运行中...</div>');
+
+            // T1: store x=1 (seq_cst)
+            const op1 = createOp(vis, 'op-write', 'store x=1', 30, 80, '#6bcb77');
+            await delay(speed);
+            op1.innerHTML = 'x.store(1, <span style="color:#ff6b6b">seq_cst</span>)';
+            await delay(speed);
+            document.querySelector('#vis-seq_cst .memory-x').textContent = 'x=1';
+            op1.classList.add('animating');
+            await delay(speed);
+
+            // T1: store y=1 (seq_cst)
+            const op2 = createOp(vis, 'op-write', 'store y=1', 55, 120, '#6bcb77');
+            await delay(speed);
+            op2.innerHTML = 'y.store(1, <span style="color:#ff6b6b">seq_cst</span>)';
+            await delay(speed);
+            document.querySelector('#vis-seq_cst .memory-y').textContent = 'y=1';
+            op2.classList.add('animating');
+            await delay(speed);
+
+            // T2: load y (seq_cst)
+            const op3 = createOp(vis, 'op-read', 'load y', 80, 150, '#4d96ff');
+            await delay(speed);
+            op3.innerHTML = 'y.load(<span style="color:#ff6b6b">seq_cst</span>)';
+            await delay(speed);
+            op3.classList.add('animating');
+            await delay(speed);
+
+            // T2: load x (seq_cst)
+            const op4 = createOp(vis, 'op-read', 'load x', 105, 180, '#4d96ff');
+            await delay(speed);
+            op4.innerHTML = 'x.load(<span style="color:#ff6b6b">seq_cst</span>)';
+            await delay(speed);
+            document.querySelector('#vis-seq_cst .memory-r').textContent = 'r=1';
+            op4.classList.add('animating');
+            await delay(speed);
+
+            // 全局顺序指示
+            createSyncLine(vis, 30, 120, 200, '全局有序');
+
+            updateResult('seq_cst', `
+                <div class="result-item result-true">✓ T2 看到 y=1</div>
+                <div class="result-item result-true">✓ T2 也看到 x=1（因为 seq_cst 全局有序）</div>
+                <div class="result-item result-neutral">→ 不会发生 "看到 y=1 但 x=0" 的情况</div>
+            `);
+        }
+
+        async function demoAcqRel() {
+            const vis = document.getElementById('vis-acq_rel');
+            updateResult('acq_rel', '<div style="color:#888">运行中...</div>');
+
+            // T1: exchange turn=1 (acq_rel)
+            const op1 = createOp(vis, 'op-cas', 'exchange(1)', 30, 80, '#e67e22');
+            await delay(speed);
+            op1.innerHTML = 'exchange(1, <span style="color:#e67e22">acq_rel</span>)';
+            await delay(speed);
+            document.querySelector('#vis-acq_rel .memory-x').textContent = 'turn=1';
+            document.querySelector('#vis-acq_rel .memory-y').textContent = 'old=0';
+            op1.classList.add('animating');
+            await delay(speed);
+
+            // 说明 acquire 和 release
+            const label = document.createElement('div');
+            label.style.cssText = 'position:absolute; top:60px; left:150px; font-size:12px; color:#ffd93d;';
+            label.innerHTML = '🔄 acquire 获取 + release 释放';
+            vis.appendChild(label);
+            await delay(speed);
+
+            // T2: store turn=0 (release)
+            const op2 = createOp(vis, 'op-write', 'store 0', 80, 200, '#6bcb77');
+            await delay(speed);
+            op2.innerHTML = 'store(0, <span style="color:#6bcb77">release</span>)';
+            await delay(speed);
+            document.querySelector('#vis-acq_rel .memory-x').textContent = 'turn=0';
+            op2.classList.add('animating');
+            await delay(speed);
+
+            createSyncLine(vis, 30, 120, 240, 'acq↔rel');
+
+            updateResult('acq_rel', `
+                <div class="result-item result-neutral">→ exchange(1, acq_rel) 原子地:</div>
+                <div class="result-item result-true">✓ 获取旧值 (old=0)</div>
+                <div class="result-item result-true">✓ 写入新值 (turn=1)</div>
+                <div class="result-item result-true">✓ 与 release 操作同步</div>
+            `);
+        }
+
+        async function demoReleaseAcquire() {
+            const vis = document.getElementById('vis-release_acquire');
+            updateResult('release_acquire', '<div style="color:#888">运行中...</div>');
+
+            // Producer: data=42
+            const op1 = createOp(vis, 'op-write', 'data=42', 30, 80, '#6bcb77');
+            await delay(speed);
+            document.querySelector('#vis-release_acquire .memory-x').textContent = 'data=42';
+            op1.classList.add('animating');
+            await delay(speed);
+
+            // Producer: ready.store(true, release)
+            const op2 = createOp(vis, 'op-write', 'ready=true', 55, 120, '#6bcb77');
+            await delay(speed);
+            op2.innerHTML = 'store(<span style="color:#6bcb77">true</span>, <span style="color:#6bcb77">release</span>)';
+            await delay(speed);
+            document.querySelector('#vis-release_acquire .memory-y').textContent = 'ready=T';
+            op2.classList.add('animating');
+            await delay(speed);
+
+            // 同步点
+            createSyncLine(vis, 55, 95, 180, '🔗 同步点');
+            await delay(speed);
+
+            // Consumer: load ready (acquire)
+            const op3 = createOp(vis, 'op-read', 'load ready', 95, 150, '#4d96ff');
+            await delay(speed);
+            op3.innerHTML = 'load(<span style="color:#4d96ff">acquire</span>)';
+            await delay(speed);
+            op3.classList.add('animating');
+            await delay(speed);
+
+            // Consumer: assert data==42
+            const op4 = createOp(vis, 'op-read', 'data==42 ✓', 120, 180, '#6bcb77');
+            await delay(speed);
+            op4.style.background = '#6bcb77';
+            op4.classList.add('animating');
+
+            updateResult('release_acquire', `
+                <div class="result-item result-neutral">→ Producer 用 release 写入</div>
+                <div class="result-item result-neutral">→ Consumer 用 acquire 读取</div>
+                <div class="result-item result-true">✓ Consumer 一定能看到 data=42</div>
+                <div class="result-item result-neutral">→ 经典的 生产者-消费者 同步模式</div>
+            `);
+        }
+
+        async function demoRelaxed() {
+            const vis = document.getElementById('vis-relaxed');
+            updateResult('relaxed', '<div style="color:#888">运行中...</div>');
+
+            // T1: store x=1 (relaxed)
+            const op1 = createOp(vis, 'op-write', 'x=1', 30, 80, '#9b59b6');
+            await delay(speed);
+            op1.innerHTML = 'store(1, <span style="color:#9b59b6">relaxed</span>)';
+            await delay(speed);
+            document.querySelector('#vis-relaxed .memory-x').textContent = 'x=1';
+            op1.classList.add('animating');
+            await delay(speed);
+
+            // T1: store y=1 (relaxed)
+            const op2 = createOp(vis, 'op-write', 'y=1', 55, 120, '#9b59b6');
+            await delay(speed);
+            op2.innerHTML = 'store(1, <span style="color:#9b59b6">relaxed</span>)';
+            await delay(speed);
+            document.querySelector('#vis-relaxed .memory-y').textContent = 'y=1';
+            op2.classList.add('animating');
+            await delay(speed);
+
+            // 可能的重排指示
+            const reorder = document.createElement('div');
+            reorder.style.cssText = 'position:absolute; top:40px; left:160px; font-size:11px; color:#888;';
+            reorder.innerHTML = '↔ 可能重排！';
+            vis.appendChild(reorder);
+            await delay(speed);
+
+            // T2: load y (relaxed)
+            const op3 = createOp(vis, 'op-read', 'r1=y', 80, 150, '#9b59b6');
+            await delay(speed);
+            op3.innerHTML = 'r1=load(<span style="color:#9b59b6">relaxed</span>)';
+            await delay(speed);
+            op3.classList.add('animating');
+            await delay(speed);
+
+            // T2: load x (relaxed)
+            const op4 = createOp(vis, 'op-read', 'r2=x', 105, 180, '#9b59b6');
+            await delay(speed);
+            op4.innerHTML = 'r2=load(<span style="color:#9b59b6">relaxed</span>)';
+            await delay(speed);
+            op4.classList.add('animating');
+
+            updateResult('relaxed', `
+                <div class="result-item result-neutral">→ relaxed 不保证顺序</div>
+                <div class="result-item result-false">✗ 可能发生: r1=0 && r2=0</div>
+                <div class="result-item result-neutral">→ 操作被 CPU/编译器 重排了</div>
+                <div class="result-item result-neutral">→ 只适合计数器等不需要同步的场景</div>
+            `);
+        }
+
+        // 默认显示第一个
+        showDemo('seq_cst');
+    </script>
+</body>
+</html>
