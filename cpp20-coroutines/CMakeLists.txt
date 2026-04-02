@@ -5,6 +5,13 @@ project(cpp20_coroutines CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Enable UTF-8 encoding
+if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+    add_compile_options(/utf-8)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options(-finput-charset=UTF-8 -fexec-charset=UTF-8)
+endif()
+
 # MSVC: 启用协程 (/await)
 if(MSVC)
     add_compile_options(/await)
